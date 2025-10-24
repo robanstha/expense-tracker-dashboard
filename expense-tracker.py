@@ -1,41 +1,42 @@
 import streamlit as st
-import datetime
 import pandas as pd
+import os
 
-st.set_page_config(page_title="Daily Habit Tracker", page_icon="✅", layout="centered")
+st.set_page_config(page_title="Daily Expense Tracker", page_icon="💰", layout="centered")
+st.title("💰 Daily Expense Tracker")
 
-st.title("✅ Daily To-Do & Habit Tracker")
+# CSV file to store expenses
+DATA_FILE = "expenses.csv"
 
-# Initialize session state
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
-
-# Input new task
-with st.form("new_task_form"):
-    task = st.text_input("Add a new task or habit")
-    submitted = st.form_submit_button("Add Task")
-    if submitted and task:
-        st.session_state.tasks.append({"task": task, "done": False, "date": datetime.date.today()})
-
-# Display task list
-st.subheader("Today's Tasks")
-if len(st.session_state.tasks) == 0:
-    st.info("No tasks yet. Add something above 👆")
+# Load existing expenses
+if os.path.exists(DATA_FILE):
+    df = pd.read_csv(DATA_FILE)
 else:
-    for i, t in enumerate(st.session_state.tasks):
-        col1, col2 = st.columns([0.8, 0.2])
-        with col1:
-            st.write(f"- {t['task']}")
-        with col2:
-            st.session_state.tasks[i]["done"] = st.checkbox("Done", value=t["done"], key=f"chk_{i}")
+    df = pd.DataFrame(columns=["name", "amount", "category"])
 
-# Summary
-completed = sum(t["done"] for t in st.session_state.tasks)
-total = len(st.session_state.tasks)
-st.progress(completed / total if total else 0)
-st.write(f"**{completed} / {total} tasks completed today.**")
+# Add new expense
+with st.form("expense_form"):
+    name = st.text_input("Expense Name")
+    amount = st.number_input("Amount ($)", min_value=0.0, format="%.2f")
+    category = st.selectbox("Category", ["Food", "Transport", "Shopping", "Bills", "Other"])
+    submitted = st.form_submit_button("Add Expense")
+    if submitted and name and amount > 0:
+        new_expense = {"name": name, "amount": amount, "category": category}
+        df = pd.concat([df, pd.DataFrame([new_expense])], ignore_index=True)
+        df.to_csv(DATA_FILE, index=False)
+        st.success("Expense added!")
 
-# Option to clear finished tasks
-if st.button("Clear Completed Tasks"):
-    st.session_state.tasks = [t for t in st.session_state.tasks if not t["done"]]
-    st.experimental_rerun()
+# Display expenses
+if not df.empty:
+    st.subheader("Your Expenses")
+    st.table(df)
+
+    # Summary by category
+    st.subheader("Summary by Category")
+    category_summary = df.groupby("category")["amount"].sum().reset_index()
+    st.bar_chart(category_summary.rename(columns={"amount": "Amount"}).set_index("category"))
+
+    # Total
+    st.write(f"**Total Spent:** ${df['amount'].sum():.2f}")
+else:
+    st.info("No expenses added yet. Use the form above to add your daily expenses.")
